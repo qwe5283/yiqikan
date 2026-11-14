@@ -332,8 +332,11 @@
 
   function setUploadProgress(percent, status) {
     $('uploadProgress').hidden = false;
-    $('uploadBar').style.width = `${percent}%`;
-    $('uploadPercent').textContent = `${Math.round(percent)}%`;
+    if (Number.isFinite(percent)) {
+      const value = Math.max(0, Math.min(100, percent));
+      $('uploadBar').style.width = `${value}%`;
+      $('uploadPercent').textContent = `${Math.round(value)}%`;
+    }
     if (status) $('uploadStatus').textContent = status;
   }
 
@@ -345,11 +348,11 @@
     return `${Math.round(value)} B/s`;
   }
 
-  function beginTransfer(size) {
-    transfer = { size, startedAt: performance.now(), samples: [], paintedAt: 0 };
+  function beginTransfer(size, initialOffset = 0) {
+    transfer = { size, initialOffset, startedAt: performance.now(), samples: [], paintedAt: 0 };
     $('uploadMeta').hidden = false;
-    $('uploadSize').textContent = `0 KB / ${formatSize(size)}`;
     $('uploadSpeed').textContent = '';
+    trackTransfer(initialOffset);
   }
 
   function trackTransfer(loaded, final = false) {
@@ -363,13 +366,20 @@
     transfer.paintedAt = now;
     const first = samples[0];
     const elapsed = (now - first.at) / 1000;
-    // 过程中用最近窗口的瞬时速度，收尾时用全程平均速度，避免末尾数字乱跳
+    // 过程中用最近窗口的瞬时速度，收尾时用本次会话平均速度，续传字节不重复计时
     const speed = final
-      ? transfer.size / Math.max(0.001, (now - transfer.startedAt) / 1000)
+      ? Math.max(0, sent - transfer.initialOffset) / Math.max(0.001, (now - transfer.startedAt) / 1000)
       : (elapsed > 0 ? (sent - first.loaded) / elapsed : 0);
     setUploadProgress(50 + (sent / transfer.size) * 45);
     $('uploadSize').textContent = `${formatSize(sent)} / ${formatSize(transfer.size)}`;
     $('uploadSpeed').textContent = final || elapsed >= 0.4 ? formatSpeed(speed) : '';
+  }
+
+  function resetTransfer(offset) {
+    if (!transfer) return;
+    transfer.samples = [];
+    transfer.paintedAt = 0;
+    trackTransfer(offset);
   }
 
   function beginJob() {
@@ -397,7 +407,7 @@
     const spark = new SparkMD5.ArrayBuffer();
     const chunkSize = 2 * 1024 * 1024;
     for (let start = 0; start < file.size; start += chunkSize) {
-      if (job.aborted) throw new Error('上传已取消');
+      if (job.aborted) throw new Error('上传已暂停');
       const end = Math.min(start + chunkSize, file.size);
       spark.append(await file.slice(start, end).arrayBuffer());
       setUploadProgress(5 + (end / file.size) * 40, '正在计算 MD5，相同文件可秒传…');
@@ -405,31 +415,139 @@
     return spark.end();
   }
 
-  function uploadRequest(file, md5, job) {
+  async function fetchJson(url, options, job) {
+    const response = await fetch(url, { cache: 'no-store', ...options, signal: job.controller.signal });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(body.error || '请求失败');
+      error.status = response.status;
+      error.code = body.code;
+      if (Number.isSafeInteger(body.offset)) error.offset = body.offset;
+      throw error;
+    }
+    return body;
+  }
+
+  function initUpload(file, md5, job) {
+    return fetchJson('/api/media/upload/init', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ md5, name: file.name, size: file.size, mime: file.type }),
+    }, job);
+  }
+
+  function completeUpload(uploadId, job) {
+    return fetchJson(`/api/media/upload/${uploadId}/complete`, { method: 'POST' }, job);
+  }
+
+  function uploadChunk(file, session, start, end, job) {
     return new Promise((resolve, reject) => {
       const request = new XMLHttpRequest();
-      request.open('POST', '/api/media/upload');
+      request.open('PUT', `/api/media/upload/${session.uploadId}/chunk`);
       request.responseType = 'json';
+      request.setRequestHeader('Content-Type', 'application/octet-stream');
+      request.setRequestHeader('X-Upload-Offset', String(start));
       job.request = request;
       request.upload.onprogress = (event) => {
-        if (event.lengthComputable) trackTransfer(event.loaded);
+        if (event.lengthComputable) trackTransfer(start + event.loaded);
       };
-      request.onerror = () => reject(new Error('上传失败，请检查网络'));
-      request.onabort = () => reject(new Error('上传已取消'));
+      request.onerror = () => {
+        job.request = null;
+        const error = new Error('上传失败，请检查网络');
+        error.status = 0;
+        reject(error);
+      };
+      request.onabort = () => {
+        job.request = null;
+        const error = new Error('上传已暂停');
+        error.code = 'UPLOAD_ABORTED';
+        reject(error);
+      };
       request.onload = () => {
+        job.request = null;
         const response = request.response || {};
-        if (request.status >= 200 && request.status < 300 && response.media) {
-          trackTransfer(file.size, true);
-          return resolve(response.media);
+        if (request.status >= 200 && request.status < 300 && Number.isSafeInteger(response.offset)) {
+          trackTransfer(response.offset);
+          return resolve(response);
         }
-        reject(new Error(response.error || '上传失败'));
+        const error = new Error(response.error || '上传失败');
+        error.status = request.status;
+        error.code = response.code;
+        if (Number.isSafeInteger(response.offset)) error.offset = response.offset;
+        reject(error);
       };
-      const form = new FormData();
-      form.append('name', file.name);
-      form.append('md5', md5);
-      form.append('file', file);
-      request.send(form);
+      request.send(file.slice(start, end));
     });
+  }
+
+  function canRetryUpload(error) {
+    return error.code === 'CHUNK_INCOMPLETE'
+      || !error.status
+      || error.status >= 500
+      || [404, 408, 429].includes(error.status);
+  }
+
+  async function resumableUpload(file, md5, job) {
+    let session = await initUpload(file, md5, job);
+    if (session.media) return session.media;
+    if (!Number.isSafeInteger(session.offset) || !Number.isSafeInteger(session.chunkSize)) {
+      throw new Error('上传状态读取失败');
+    }
+    beginTransfer(file.size, session.offset);
+    let retries = 0;
+    while (session.offset < file.size) {
+      if (job.aborted) throw new Error('上传已暂停');
+      const start = session.offset;
+      const end = Math.min(start + session.chunkSize, file.size);
+      try {
+        const accepted = await uploadChunk(file, session, start, end, job);
+        session.offset = accepted.offset;
+        retries = 0;
+      } catch (error) {
+        if (job.aborted || error.code === 'UPLOAD_ABORTED') throw new Error('上传已暂停');
+        if (error.code === 'OFFSET_MISMATCH' && Number.isSafeInteger(error.offset)) {
+          session.offset = error.offset;
+          resetTransfer(session.offset);
+          setUploadProgress(null, '正在同步断点位置…');
+          continue;
+        }
+        if (!canRetryUpload(error)) throw error;
+        retries += 1;
+        if (retries > 3) throw new Error(`${error.message}，重新选择同一文件可续传`);
+        setUploadProgress(null, `连接中断，正在恢复上传（${retries}/3）…`);
+        await new Promise((resolve) => setTimeout(resolve, retries * 400));
+        if (job.aborted) throw new Error('上传已暂停');
+        let refreshed;
+        try {
+          refreshed = await initUpload(file, md5, job);
+        } catch (refreshError) {
+          if (retries >= 3 || !canRetryUpload(refreshError)) throw refreshError;
+          continue;
+        }
+        if (refreshed.media) return refreshed.media;
+        if (!Number.isSafeInteger(refreshed.offset) || !Number.isSafeInteger(refreshed.chunkSize)) {
+          throw new Error('上传状态读取失败');
+        }
+        session = refreshed;
+        resetTransfer(session.offset);
+      }
+    }
+    setUploadProgress(96, '正在校验并发布媒体…');
+    let completed;
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        completed = await completeUpload(session.uploadId, job);
+        break;
+      } catch (error) {
+        if (job.aborted) throw new Error('上传已暂停');
+        if (!canRetryUpload(error) || attempt >= 2) throw error;
+        setUploadProgress(null, `发布确认中断，正在重试（${attempt + 1}/3）…`);
+        await new Promise((resolve) => setTimeout(resolve, (attempt + 1) * 400));
+      }
+    }
+    if (!completed.media) throw new Error('媒体发布失败');
+    trackTransfer(file.size, true);
+    return completed.media;
   }
 
   async function uploadOne(file) {
@@ -440,19 +558,16 @@
     setUploadProgress(2, '正在读取文件…');
     const md5 = await md5Of(file, job);
     setUploadProgress(47, '正在检查是否可以秒传…');
-    const response = await fetch(`/api/media/check?md5=${md5}`, { cache: 'no-store', signal: job.controller.signal });
-    const check = await response.json();
-    if (!response.ok) throw new Error(check.error || '校验失败');
+    const check = await fetchJson(`/api/media/check?md5=${md5}`, {}, job);
     let media = check.media;
     if (media) {
       setUploadProgress(96, '发现相同文件，秒传完成');
       toast(`「${file.name}」已秒传`, 'success');
     } else {
-      setUploadProgress(50, '正在上传媒体…');
-      beginTransfer(file.size);
-      media = await uploadRequest(file, md5, job);
+      setUploadProgress(50, '正在准备断点上传…');
+      media = await resumableUpload(file, md5, job);
     }
-    if (job.aborted) throw new Error('上传已取消');
+    if (job.aborted) throw new Error('上传已暂停');
     commitJob();
     setUploadProgress(100, '正在加入播放列表…');
     const result = await emitAck('media:add', { md5: media.md5, name: file.name });
@@ -475,7 +590,7 @@
           await uploadOne(file);
         } catch (error) {
           if (uploadJob && uploadJob.aborted) {
-            toast('已取消上传');
+            toast('已暂停，重新选择同一文件可续传');
             break;
           }
           toast(`${file.name}：${error.message}`, 'error');

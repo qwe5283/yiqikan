@@ -1,9 +1,7 @@
 const http = require('node:http');
 const path = require('node:path');
 const fs = require('node:fs');
-const crypto = require('node:crypto');
 const express = require('express');
-const multer = require('multer');
 const { Server } = require('socket.io');
 const {
   createCode,
@@ -14,6 +12,7 @@ const {
 } = require('./lib/rooms');
 const { readMaxFileSize, fileSizeLabel } = require('./lib/config');
 const { createIceServers } = require('./lib/turn');
+const { createUploadStore, UploadError } = require('./lib/uploads');
 
 const PORT = Number(process.env.PORT) || 3000;
 const MAX_FILE_SIZE = readMaxFileSize();
@@ -30,6 +29,14 @@ const MEDIA_TYPES = {
   '.ogg': 'audio/ogg', '.oga': 'audio/ogg', '.m4a': 'audio/mp4', '.aac': 'audio/aac',
   '.flac': 'audio/flac',
 };
+const UPLOAD_SESSION_TTL = 24 * 60 * 60 * 1000;
+const uploadStore = createUploadStore({
+  tempDir: TEMP_DIR,
+  uploadDir: UPLOAD_DIR,
+  maxFileSize: MAX_FILE_SIZE,
+  maxFileSizeLabel: MAX_FILE_SIZE_LABEL,
+  allowedExtensions: Object.keys(MEDIA_TYPES),
+});
 const mediaIndex = new Map();
 
 function cleanFileName(value) {
@@ -45,6 +52,29 @@ function makeMedia(md5, extension, name, size) {
     size,
     kind: MEDIA_TYPES[extension].startsWith('audio/') ? 'audio' : 'video',
   };
+}
+
+function validateMediaRequest(name, mime) {
+  const extension = path.extname(name).toLowerCase();
+  if (!MEDIA_TYPES[extension]) {
+    throw new UploadError(415, 'UNSUPPORTED_MEDIA_TYPE', '格式暂不支持，请选择常见音视频文件');
+  }
+  const value = String(mime || '');
+  if (value && value !== 'application/octet-stream') {
+    const mimeKind = value.split('/')[0];
+    const extensionKind = MEDIA_TYPES[extension].startsWith('audio/') ? 'audio' : 'video';
+    if (!['audio', 'video'].includes(mimeKind) || mimeKind !== extensionKind) {
+      throw new UploadError(415, 'MEDIA_TYPE_MISMATCH', '文件类型与扩展名不一致');
+    }
+  }
+}
+
+function indexUploadedMedia(file) {
+  const existing = mediaIndex.get(file.md5);
+  if (existing) return existing;
+  const media = makeMedia(file.md5, file.extension, file.name, file.size);
+  mediaIndex.set(file.md5, media);
+  return media;
 }
 
 for (const file of fs.readdirSync(UPLOAD_DIR)) {
@@ -88,67 +118,62 @@ app.get('/api/media/check', (req, res) => {
   return res.json({ exists: Boolean(media), media });
 });
 
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: TEMP_DIR,
-    filename: (req, file, callback) => callback(null, crypto.randomUUID()),
-  }),
-  limits: { fileSize: MAX_FILE_SIZE, files: 1 },
-});
-
-function hashFile(filePath) {
-  return new Promise((resolve, reject) => {
-    const hash = crypto.createHash('md5');
-    fs.createReadStream(filePath)
-      .on('data', (chunk) => hash.update(chunk))
-      .on('error', reject)
-      .on('end', () => resolve(hash.digest('hex')));
-  });
-}
-
-app.post('/api/media/upload', upload.single('file'), async (req, res, next) => {
+app.post('/api/media/upload/init', async (req, res, next) => {
   try {
-    if (!req.file) return res.status(400).json({ error: '请选择音视频文件' });
-    const name = cleanFileName(req.body.name || req.file.originalname);
-    const extension = path.extname(name).toLowerCase();
-    if (!MEDIA_TYPES[extension]) {
-      return res.status(415).json({ error: '格式暂不支持，请选择常见音视频文件' });
+    const md5 = String(req.body && req.body.md5 || '').toLowerCase();
+    const existing = mediaIndex.get(md5);
+    if (existing) return res.json({ media: existing, instant: true });
+    const name = cleanFileName(req.body && req.body.name);
+    validateMediaRequest(name, req.body && req.body.mime);
+    const session = await uploadStore.init({
+      md5,
+      name,
+      size: Number(req.body && req.body.size),
+    });
+    if (session.published) {
+      return res.json({ media: indexUploadedMedia(session.published), instant: true });
     }
-    const mime = req.file.mimetype || '';
-    if (mime && mime !== 'application/octet-stream') {
-      const mimeKind = mime.split('/')[0];
-      if (!['audio', 'video'].includes(mimeKind) || mimeKind !== makeMedia('0'.repeat(32), extension, name, 0).kind) {
-        return res.status(415).json({ error: '文件类型与扩展名不一致' });
-      }
-    }
-    const md5 = await hashFile(req.file.path);
-    if (md5 !== String(req.body.md5 || '').toLowerCase()) {
-      return res.status(400).json({ error: '文件校验失败，请重新上传' });
-    }
-    let media = mediaIndex.get(md5);
-    if (media) {
-      await fs.promises.unlink(req.file.path);
-    } else {
-      const target = path.join(UPLOAD_DIR, `${md5}${extension}`);
-      await fs.promises.rename(req.file.path, target);
-      media = makeMedia(md5, extension, name, req.file.size);
-      mediaIndex.set(md5, media);
-    }
-    return res.json({ media, instant: false });
+    return res.json(session);
   } catch (error) {
     return next(error);
-  } finally {
-    if (req.file && fs.existsSync(req.file.path)) await fs.promises.unlink(req.file.path).catch(() => {});
+  }
+});
+
+app.put('/api/media/upload/:id/chunk', async (req, res, next) => {
+  try {
+    const result = await uploadStore.append({
+      uploadId: req.params.id,
+      offset: Number(req.get('X-Upload-Offset')),
+      contentLength: Number(req.get('Content-Length')),
+      body: req,
+    });
+    return res.json(result);
+  } catch (error) {
+    req.resume();
+    return next(error);
+  }
+});
+
+app.post('/api/media/upload/:id/complete', async (req, res, next) => {
+  try {
+    const existing = mediaIndex.get(String(req.params.id || '').toLowerCase());
+    if (existing) return res.json({ media: existing, instant: false });
+    const completed = await uploadStore.complete(req.params.id);
+    return res.json({ media: indexUploadedMedia(completed), instant: false });
+  } catch (error) {
+    return next(error);
   }
 });
 
 app.use(express.static(path.join(ROOT, 'public')));
 app.use((error, req, res, next) => {
-  console.error(error);
+  const status = Number.isInteger(error.status) ? error.status : 500;
+  if (status >= 500) console.error(error);
   if (res.headersSent) return next(error);
-  const status = error.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
-  const message = error.code === 'LIMIT_FILE_SIZE' ? `单个文件不能超过 ${MAX_FILE_SIZE_LABEL}` : error.message || '请求失败';
-  return res.status(status).json({ error: message });
+  const message = status >= 500 ? '服务器处理失败' : error.message || '请求失败';
+  const body = { error: message, code: error.code || 'REQUEST_FAILED' };
+  if (Number.isSafeInteger(error.offset)) body.offset = error.offset;
+  return res.status(status).json(body);
 });
 
 function snapshot(room, selfId) {
@@ -325,6 +350,12 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => leaveRoom(socket));
 });
+
+function cleanupUploadSessions() {
+  uploadStore.cleanup(UPLOAD_SESSION_TTL).catch((error) => console.error('清理过期上传失败', error));
+}
+cleanupUploadSessions();
+setInterval(cleanupUploadSessions, 60 * 60 * 1000).unref();
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`一起看已启动：http://localhost:${PORT}`);
