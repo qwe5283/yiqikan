@@ -156,16 +156,24 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .player-card:fullscreen .control-button { color: #f4f2fa; }
 .player-card:fullscreen .control-button:hover { background: rgba(255, 255, 255, .14); }
 .player-card:fullscreen .timeline-row { color: #d0cbd8; }
-.player-card:fullscreen .now-playing { color: #e4dfea; }
 .player-card:fullscreen .stage-topline { transition: opacity .22s ease; }
 .player-card.controls-hidden, .player-card.controls-hidden * { cursor: none !important; }
 .player-card.controls-hidden .player-controls { opacity: 0; transform: translateY(12px); pointer-events: none; }
 .player-card.controls-hidden .stage-topline { opacity: 0; }
+.fullscreen-voice-button { position: absolute; z-index: 5; right: 22px; bottom: 112px; width: 48px; height: 48px; display: none; place-items: center; padding: 0; border: 0; border-radius: 50%; color: white; background: rgba(0, 0, 0, .48); touch-action: none; user-select: none; backdrop-filter: blur(6px); transition: opacity .22s ease, transform .22s ease; }
+.player-card:fullscreen .fullscreen-voice-button:not([hidden]) { display: grid; }
+.player-card.controls-hidden .fullscreen-voice-button { opacity: 0; transform: translateY(12px); pointer-events: none; }
+.fullscreen-voice-button > svg { width: 21px; height: 21px; }
+.fullscreen-voice-button .sound-bars { display: none; }
+.fullscreen-voice-button .sound-bars i { background: white; }
+.fullscreen-voice-button.talking { background: #6c5ce7; }
+.fullscreen-voice-button.talking > svg { display: none; }
+.fullscreen-voice-button.talking .sound-bars { display: flex; }
 .timeline-row { display: flex; align-items: center; gap: 11px; color: #9b9aa6; font-size: 10px; font-variant-numeric: tabular-nums; }
 .timeline { --progress: 0%; flex: 1; height: 4px; margin: 0; border-radius: 4px; appearance: none; background: linear-gradient(to right, var(--purple) var(--progress), #e8e6ef var(--progress)); cursor: pointer; }
 .timeline::-webkit-slider-thumb { width: 12px; height: 12px; appearance: none; border: 2px solid white; border-radius: 50%; background: var(--purple); box-shadow: 0 1px 5px rgba(57, 42, 136, .35); }
 .timeline::-moz-range-thumb { width: 9px; height: 9px; border: 2px solid white; border-radius: 50%; background: var(--purple); }
-.control-row { display: flex; align-items: center; margin-top: 12px; }
+.control-row { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
 .main-controls, .secondary-controls { display: flex; align-items: center; gap: 5px; }
 .control-button { width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 9px; color: #666572; background: transparent; }
 .control-button:hover { color: var(--purple); background: #f3f1fc; }
@@ -173,7 +181,6 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .play-control { color: white; background: var(--purple); border-radius: 10px; margin-right: 3px; }
 .play-control:hover { color: white; background: var(--purple-dark); }
 .play-control svg { width: 17px; height: 17px; }
-.now-playing { flex: 1; min-width: 0; margin: 0 16px; overflow: hidden; color: #777582; text-align: center; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
 .volume { width: 62px; height: 3px; accent-color: var(--purple); cursor: pointer; }
 
 .playlist-card { flex: 1; min-height: 170px; display: flex; flex-direction: column; }
@@ -298,7 +305,6 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
   .room-status-group { margin-left: 0; }
   .connection-status, .room-label { display: none; }
   .stage { min-height: 280px; }
-  .now-playing { margin-inline: 8px; }
   .volume { display: none; }
 }
 
@@ -373,7 +379,6 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
   .player-controls { padding: 11px 10px 12px; }
   .control-row { margin-top: 10px; }
   .control-button { width: 32px; height: 32px; }
-  .now-playing { display: none; }
   .secondary-controls { margin-left: auto; }
   .section-header { padding: 15px 14px 12px; }
   .section-header p { display: none; }

@@ -658,7 +658,6 @@
     $('mediaKindBadge').hidden = !media;
     $('mediaKindBadge').textContent = media ? `${media.kind === 'audio' ? '音频' : '视频'} · ${media.name}` : '';
     $('audioTitle').textContent = media?.name || '';
-    $('nowPlaying').textContent = media?.name || '尚未选择媒体';
     for (const id of ['playButton', 'rewindButton', 'forwardButton', 'timeline', 'fullscreenButton']) {
       $(id).disabled = !media;
     }
@@ -835,12 +834,14 @@
     });
     $('holdToTalk').hidden = voice.mode !== 'hold';
     $('freeTalk').hidden = voice.mode !== 'free';
+    const connected = [...voice.peers.values()].filter((peer) => peer.pc.connectionState === 'connected').length;
+    const talking = voice.active && voice.stream?.getAudioTracks().some((track) => track.enabled);
+    $('fullscreenVoiceButton').hidden = !voice.active || !connected;
+    $('fullscreenVoiceButton').classList.toggle('talking', Boolean(talking));
+    $('fullscreenVoiceButton').setAttribute('aria-label', voice.mode === 'hold' ? '切换为自由说话，或长按说话' : '切换为按住说话');
     if (!voice.active) $('voiceStatus').textContent = '默认关闭，需要时再开启';
     else if (!voice.peers.size) $('voiceStatus').textContent = '等待对方开启语音';
-    else {
-      const connected = [...voice.peers.values()].filter((peer) => peer.pc.connectionState === 'connected').length;
-      $('voiceStatus').textContent = connected ? `${connected + 1} 人在通话` : '正在连接对方…';
-    }
+    else $('voiceStatus').textContent = connected ? `${connected + 1} 人在通话` : '正在连接对方…';
   }
 
   function setMicrophone(enabled) {
@@ -848,6 +849,7 @@
     state.voice.stream?.getAudioTracks().forEach((track) => { track.enabled = enabled; });
     $('holdToTalk').classList.toggle('talking', enabled && state.voice.mode === 'hold');
     $('holdToTalk').querySelector('span').textContent = enabled && state.voice.mode === 'hold' ? '正在说话…' : '按住说话';
+    $('fullscreenVoiceButton').classList.toggle('talking', enabled);
   }
 
   function closePeer(id) {
@@ -947,6 +949,7 @@
   }
 
   function stopVoice(notify = true) {
+    stopFullscreenHold();
     if (notify && state.voice.active) socket.emit('voice:leave');
     for (const id of [...state.voice.peers.keys()]) closePeer(id);
     state.voice.stream?.getTracks().forEach((track) => track.stop());
@@ -956,14 +959,50 @@
     updateVoiceUI();
   }
 
+  function setVoiceMode(mode) {
+    state.voice.mode = mode;
+    setMicrophone(mode === 'free');
+    updateVoiceUI();
+  }
+
   $('voiceToggle').addEventListener('click', () => state.voice.active ? stopVoice() : startVoice());
   document.querySelectorAll('[data-voice-mode]').forEach((button) => {
-    button.addEventListener('click', () => {
-      state.voice.mode = button.dataset.voiceMode;
-      setMicrophone(state.voice.mode === 'free');
-      updateVoiceUI();
-    });
+    button.addEventListener('click', () => setVoiceMode(button.dataset.voiceMode));
   });
+  let fullscreenHoldTimer;
+  let fullscreenHolding = false;
+  let suppressVoiceModeClick = false;
+  function stopFullscreenHold() {
+    clearTimeout(fullscreenHoldTimer);
+    if (fullscreenHolding) setMicrophone(false);
+    fullscreenHolding = false;
+  }
+  $('fullscreenVoiceButton').addEventListener('pointerdown', (event) => {
+    suppressVoiceModeClick = false;
+    if (state.voice.mode !== 'hold') return;
+    event.preventDefault();
+    $('fullscreenVoiceButton').setPointerCapture(event.pointerId);
+    fullscreenHoldTimer = setTimeout(() => {
+      fullscreenHolding = true;
+      suppressVoiceModeClick = true;
+      setMicrophone(true);
+    }, 200);
+  });
+  for (const event of ['pointerup', 'lostpointercapture']) {
+    $('fullscreenVoiceButton').addEventListener(event, stopFullscreenHold);
+  }
+  $('fullscreenVoiceButton').addEventListener('pointercancel', () => {
+    suppressVoiceModeClick = false;
+    stopFullscreenHold();
+  });
+  $('fullscreenVoiceButton').addEventListener('click', () => {
+    if (suppressVoiceModeClick) {
+      suppressVoiceModeClick = false;
+      return;
+    }
+    setVoiceMode(state.voice.mode === 'hold' ? 'free' : 'hold');
+  });
+  $('fullscreenVoiceButton').addEventListener('contextmenu', (event) => event.preventDefault());
   $('holdToTalk').addEventListener('pointerdown', (event) => {
     event.preventDefault();
     $('holdToTalk').setPointerCapture(event.pointerId);
@@ -983,6 +1022,7 @@
   });
   $('holdToTalk').addEventListener('contextmenu', (event) => event.preventDefault());
   window.addEventListener('blur', () => {
+    stopFullscreenHold();
     if (state.voice.mode === 'hold') setMicrophone(false);
   });
 
