@@ -22,5 +22,4 @@ services:
       - --listening-port=${TURN_PORT:-3478}
       - --min-port=${TURN_MIN_PORT:-49152}
       - --max-port=${TURN_MAX_PORT:-49252}
-      - --no-loopback-peers
       - --no-multicast-peers
