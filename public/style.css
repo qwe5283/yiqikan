@@ -208,6 +208,9 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .upload-progress-copy strong { font-size: 11px; }
 .upload-progress-copy small { margin-top: 4px; color: #9992ad; font-size: 9px; }
 #uploadPercent { color: var(--purple); font-size: 11px; font-variant-numeric: tabular-nums; }
+.upload-cancel { flex: none; height: 22px; padding: 0 9px; border: 1px solid #e2ddf4; border-radius: 7px; color: #858695; background: #fff; font-size: 10px; font-weight: 550; transition: color .15s, border-color .15s; }
+.upload-cancel:hover:not(:disabled) { color: var(--purple); border-color: #cfc6f5; }
+.upload-cancel:disabled { opacity: .4; cursor: default; }
 .progress-track { height: 3px; margin-top: 10px; overflow: hidden; border-radius: 3px; background: #e3def1; }
 .progress-track span { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--purple); transition: width .2s; }
 .upload-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; color: #9992ad; font-size: 9px; font-variant-numeric: tabular-nums; }

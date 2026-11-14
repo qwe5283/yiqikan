@@ -328,6 +328,7 @@
   const TRANSFER_WINDOW = 2500;
   const TRANSFER_PAINT = 120;
   let transfer = null;
+  let uploadJob = null;
 
   function setUploadProgress(percent, status) {
     $('uploadProgress').hidden = false;
@@ -371,10 +372,32 @@
     $('uploadSpeed').textContent = final || elapsed >= 0.4 ? formatSpeed(speed) : '';
   }
 
-  async function md5Of(file) {
+  function beginJob() {
+    uploadJob = { aborted: false, committed: false, request: null, controller: new AbortController() };
+    $('uploadCancel').disabled = false;
+    return uploadJob;
+  }
+
+  function commitJob() {
+    if (!uploadJob) return;
+    uploadJob.committed = true;
+    $('uploadCancel').disabled = true;
+  }
+
+  function cancelUpload() {
+    const job = uploadJob;
+    if (!job || job.aborted || job.committed) return;
+    job.aborted = true;
+    $('uploadCancel').disabled = true;
+    if (job.request) job.request.abort();
+    job.controller.abort();
+  }
+
+  async function md5Of(file, job) {
     const spark = new SparkMD5.ArrayBuffer();
     const chunkSize = 2 * 1024 * 1024;
     for (let start = 0; start < file.size; start += chunkSize) {
+      if (job.aborted) throw new Error('上传已取消');
       const end = Math.min(start + chunkSize, file.size);
       spark.append(await file.slice(start, end).arrayBuffer());
       setUploadProgress(5 + (end / file.size) * 40, '正在计算 MD5，相同文件可秒传…');
@@ -382,11 +405,12 @@
     return spark.end();
   }
 
-  function uploadRequest(file, md5) {
+  function uploadRequest(file, md5, job) {
     return new Promise((resolve, reject) => {
       const request = new XMLHttpRequest();
       request.open('POST', '/api/media/upload');
       request.responseType = 'json';
+      job.request = request;
       request.upload.onprogress = (event) => {
         if (event.lengthComputable) trackTransfer(event.loaded);
       };
@@ -409,13 +433,14 @@
   }
 
   async function uploadOne(file) {
+    const job = beginJob();
     $('uploadName').textContent = file.name;
     transfer = null;
     $('uploadMeta').hidden = true;
     setUploadProgress(2, '正在读取文件…');
-    const md5 = await md5Of(file);
+    const md5 = await md5Of(file, job);
     setUploadProgress(47, '正在检查是否可以秒传…');
-    const response = await fetch(`/api/media/check?md5=${md5}`, { cache: 'no-store' });
+    const response = await fetch(`/api/media/check?md5=${md5}`, { cache: 'no-store', signal: job.controller.signal });
     const check = await response.json();
     if (!response.ok) throw new Error(check.error || '校验失败');
     let media = check.media;
@@ -425,8 +450,10 @@
     } else {
       setUploadProgress(50, '正在上传媒体…');
       beginTransfer(file.size);
-      media = await uploadRequest(file, md5);
+      media = await uploadRequest(file, md5, job);
     }
+    if (job.aborted) throw new Error('上传已取消');
+    commitJob();
     setUploadProgress(100, '正在加入播放列表…');
     const result = await emitAck('media:add', { md5: media.md5, name: file.name });
     if (result.duplicate) toast('这个文件已经在播放列表中');
@@ -447,17 +474,23 @@
           if (!file.size) throw new Error('不能上传空文件');
           await uploadOne(file);
         } catch (error) {
+          if (uploadJob && uploadJob.aborted) {
+            toast('已取消上传');
+            break;
+          }
           toast(`${file.name}：${error.message}`, 'error');
         }
       }
     } finally {
       state.uploadBusy = false;
       transfer = null;
+      uploadJob = null;
       $('uploadButton').disabled = false;
       $('emptyUploadButton').disabled = false;
       $('uploadProgress').hidden = true;
     }
   });
+  $('uploadCancel').addEventListener('click', cancelUpload);
   for (const id of ['uploadButton', 'emptyUploadButton']) {
     $(id).addEventListener('click', () => {
       if (!state.code) return;
