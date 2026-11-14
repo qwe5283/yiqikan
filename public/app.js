@@ -559,13 +559,19 @@
     $('muteButton').querySelector('use').setAttribute('href', $('player').muted ? '#i-mute' : '#i-volume');
   });
   $('fullscreenButton').addEventListener('click', async () => {
+    const playerCard = $('stage').parentElement;
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
-      else if ($('stage').requestFullscreen) await $('stage').requestFullscreen();
+      else if (playerCard.requestFullscreen) await playerCard.requestFullscreen();
       else if ($('player').webkitEnterFullscreen) $('player').webkitEnterFullscreen();
     } catch {
       toast('当前浏览器不支持全屏', 'error');
     }
+  });
+  document.addEventListener('fullscreenchange', () => {
+    const label = document.fullscreenElement ? '退出全屏' : '全屏';
+    $('fullscreenButton').setAttribute('aria-label', label);
+    $('fullscreenButton').title = label;
   });
   $('player').addEventListener('loadedmetadata', () => syncPlayer(true));
   $('player').addEventListener('play', updatePlayButton);
