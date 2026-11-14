@@ -1,7 +1,6 @@
 services:
   yiqikan:
     build: .
-    image: yiqikan:latest
     ports:
       - "${APP_PORT:-3000}:3000"
     volumes:
