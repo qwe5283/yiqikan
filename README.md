@@ -17,7 +17,15 @@ docker compose up -d
 - 修改端口：`APP_PORT=8080 docker compose up -d`
 - 查看日志：`docker compose logs -f`
 - 停止服务：`docker compose down`
-- 上传的媒体保存在名为 `yiqikan-data` 的 Docker volume 中，普通重启或 `down` 不会删除；`down -v` 会永久删除媒体。
+- 上传的媒体直接保存在项目目录的 `./data`，重启、`down` 或 `down -v` 都不会删除这些宿主机文件。
+
+**Linux 权限提醒：** 容器使用 UID 为 `1000` 的非 root `node` 用户。如果 `./data` 无法写入，请在项目目录执行以下命令后重新启动；Windows 和 macOS 通常无需此操作。
+
+```bash
+mkdir -p data
+sudo chown -R 1000:1000 data
+docker compose up -d
+```
 
 ## 本地开发
 
