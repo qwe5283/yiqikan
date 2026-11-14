@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f4f5fa">
+  <meta name="description" content="创建双人房间，同步看视频、聊天和语音。">
+  <title>一起看 · 精彩同步发生</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%236c5ce7'/%3E%3Cpath d='M25 19l24 13-24 13z' fill='white'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <svg class="svg-defs" aria-hidden="true">
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7V5Z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14" stroke-width="3"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V3m-5 5 5-5 5 5M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5"/></symbol>
+    <symbol id="i-video" viewBox="0 0 24 24"><rect x="2" y="5" width="15" height="14" rx="3"/><path d="m17 10 5-3v10l-5-3"/></symbol>
+    <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13M9 8l11-2"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></symbol>
+    <symbol id="i-rewind" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M11 9v6M15 9l-2 3 2 3"/></symbol>
+    <symbol id="i-forward" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5M10 9v6M14 9l-2 3 2 3"/></symbol>
+    <symbol id="i-volume" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5ZM15 9a4 4 0 0 1 0 6M18 6a8 8 0 0 1 0 12"/></symbol>
+    <symbol id="i-mute" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5ZM16 9l6 6M22 9l-6 6"/></symbol>
+    <symbol id="i-maximize" viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.69 2.8a2 2 0 0 1-.45 2.11L8.08 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.33 1.85.56 2.81.69A2 2 0 0 1 22 16.9Z"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4 20-7Z"/><path d="M22 2 11 13"/></symbol>
+    <symbol id="i-leave" viewBox="0 0 24 24"><path d="M10 17l5-5-5-5M15 12H3M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V6a4 4 0 0 1 8 0v4"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+  </svg>
+
+  <div id="landingView" class="landing">
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+    <header class="landing-nav page-width">
+      <a class="brand" href="/" aria-label="一起看首页">
+        <span class="brand-mark"><svg><use href="#i-play"></use></svg></span>
+        <span>一起看<span class="brand-dot">.</span></span>
+      </a>
+      <div class="nav-note"><span class="online-dot"></span> 让陪伴实时发生</div>
+    </header>
+
+    <main class="landing-main page-width">
+      <section class="hero">
+        <div class="eyebrow"><span></span> TOGETHER, WHEREVER</div>
+        <h1>距离很远，<br><span>精彩很近。</span></h1>
+        <p class="hero-copy">一个房间，两个人。同步每一帧，也分享每一刻。</p>
+        <div class="feature-row">
+          <div class="feature"><span class="feature-icon purple"><svg><use href="#i-play"></use></svg></span><div><strong>双向同步</strong><small>播放进度始终一致</small></div></div>
+          <div class="feature"><span class="feature-icon orange"><svg><use href="#i-send"></use></svg></span><div><strong>即时互动</strong><small>聊天语音都在身边</small></div></div>
+          <div class="feature"><span class="feature-icon green"><svg><use href="#i-lock"></use></svg></span><div><strong>私密双人</strong><small>凭房间码即可加入</small></div></div>
+        </div>
+        <div class="social-proof">
+          <div class="mini-avatars"><span>林</span><span>周</span><span><svg><use href="#i-play"></use></svg></span></div>
+          <p>把「下次一起」变成「现在一起」</p>
+        </div>
+      </section>
+
+      <section class="entry-card" aria-label="进入房间">
+        <div class="entry-decoration"><span></span><span></span><span></span></div>
+        <div class="entry-heading">
+          <span class="entry-kicker">现在开始</span>
+          <h2>和你想看的人一起看</h2>
+          <p>无需注册，30 秒开启双人影院</p>
+        </div>
+        <div class="entry-tabs" role="tablist" aria-label="进入方式">
+          <button id="createTab" class="entry-tab active" role="tab" aria-selected="true" data-mode="create">创建房间</button>
+          <button id="joinTab" class="entry-tab" role="tab" aria-selected="false" data-mode="join">加入房间</button>
+        </div>
+        <form id="entryForm" novalidate>
+          <label id="joinCodeField" class="field" hidden>
+            <span>房间码</span>
+            <input id="joinCodeInput" name="code" type="text" maxlength="4" placeholder="输入 4 位房间码" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text">
+          </label>
+          <label class="field">
+            <span>你的昵称</span>
+            <input id="nicknameInput" name="nickname" type="text" maxlength="16" placeholder="怎么称呼你？" autocomplete="nickname" required>
+          </label>
+          <button id="entrySubmit" class="primary-button entry-submit" type="submit">
+            <span id="entrySubmitText">创建我的房间</span><svg><use href="#i-chevron"></use></svg>
+          </button>
+        </form>
+        <p class="privacy-note"><svg><use href="#i-lock"></use></svg> 仅在当前房间交流，不收集个人信息</p>
+      </section>
+    </main>
+    <footer class="landing-footer page-width"><span>一起看 · 让每一次观看都有回应</span><span>支持常见音视频格式 · 最大 1 GB</span></footer>
+  </div>
+
+  <div id="roomView" class="room-view" hidden>
+    <header class="room-topbar">
+      <a class="brand room-brand" href="/" aria-label="一起看">
+        <span class="brand-mark"><svg><use href="#i-play"></use></svg></span>
+        <span>一起看<span class="brand-dot">.</span></span>
+      </a>
+      <div class="room-status-group">
+        <span class="room-label">当前房间</span>
+        <button id="copyCodeButton" class="room-code" type="button" title="复制房间码">
+          <span class="online-dot"></span><strong id="roomCode">----</strong><svg><use href="#i-copy"></use></svg>
+        </button>
+        <span id="connectionStatus" class="connection-status">已连接</span>
+      </div>
+      <div class="room-actions">
+        <div id="headerAvatars" class="header-avatars"></div>
+        <button id="leaveButton" class="ghost-button leave-button" type="button"><svg><use href="#i-leave"></use></svg><span>离开房间</span></button>
+      </div>
+    </header>
+
+    <main class="room-layout">
+      <div class="watch-column">
+        <section class="player-card" aria-label="同步播放器">
+          <div id="stage" class="stage empty">
+            <video id="player" playsinline preload="metadata"></video>
+            <div id="emptyPlayer" class="empty-player">
+              <div class="empty-visual"><span class="orbit orbit-one"></span><span class="orbit orbit-two"></span><svg><use href="#i-play"></use></svg></div>
+              <h2>今晚，看点什么？</h2>
+              <p>上传音视频，和房间里的人一起欣赏</p>
+              <button id="emptyUploadButton" class="upload-empty-button" type="button"><svg><use href="#i-upload"></use></svg> 选择本地文件</button>
+            </div>
+            <div id="audioArtwork" class="audio-artwork" hidden>
+              <div class="record"><span></span><svg><use href="#i-music"></use></svg></div>
+              <strong id="audioTitle">正在播放音频</strong><small>两个人，同一段旋律</small>
+            </div>
+            <div class="stage-topline">
+              <span id="mediaKindBadge" class="media-kind-badge" hidden></span>
+              <span class="sync-badge"><span class="online-dot"></span> 双人同步</span>
+            </div>
+            <button id="resumeButton" class="resume-button" type="button" hidden aria-label="继续播放"><svg><use href="#i-play"></use></svg></button>
+          </div>
+          <div class="player-controls">
+            <div class="timeline-row">
+              <span id="currentTime">00:00</span>
+              <input id="timeline" class="timeline" type="range" min="0" max="1000" value="0" step="1" aria-label="播放进度">
+              <span id="duration">00:00</span>
+            </div>
+            <div class="control-row">
+              <div class="main-controls">
+                <button id="playButton" class="control-button play-control" type="button" aria-label="播放"><svg><use href="#i-play"></use></svg></button>
+                <button id="rewindButton" class="control-button" type="button" aria-label="后退 10 秒" title="后退 10 秒"><svg><use href="#i-rewind"></use></svg></button>
+                <button id="forwardButton" class="control-button" type="button" aria-label="前进 10 秒" title="前进 10 秒"><svg><use href="#i-forward"></use></svg></button>
+              </div>
+              <span id="nowPlaying" class="now-playing">尚未选择媒体</span>
+              <div class="secondary-controls">
+                <button id="muteButton" class="control-button" type="button" aria-label="静音"><svg><use href="#i-volume"></use></svg></button>
+                <input id="volume" class="volume" type="range" min="0" max="1" value="1" step="0.05" aria-label="音量">
+                <button id="fullscreenButton" class="control-button" type="button" aria-label="全屏"><svg><use href="#i-maximize"></use></svg></button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="playlist-card">
+          <header class="section-header">
+            <div><h2>播放列表 <span id="playlistCount" class="count-badge">0</span></h2><p>房间里的好内容，随时一起切换</p></div>
+            <button id="uploadButton" class="secondary-button" type="button"><svg><use href="#i-plus"></use></svg> 上传媒体</button>
+            <input id="fileInput" type="file" accept="video/*,audio/*,.mkv" multiple hidden>
+          </header>
+          <div id="uploadProgress" class="upload-progress" hidden>
+            <div class="upload-progress-copy"><svg><use href="#i-upload"></use></svg><div><strong id="uploadName">正在处理</strong><small id="uploadStatus">正在计算 MD5…</small></div><span id="uploadPercent">0%</span></div>
+            <div class="progress-track"><span id="uploadBar"></span></div>
+          </div>
+          <div id="mediaList" class="media-list"></div>
+        </section>
+      </div>
+
+      <aside class="chat-card">
+        <header class="chat-header"><div><h2>房间聊天</h2><p><span class="online-dot"></span><span id="onlineCount">1 位成员在线</span></p></div><span class="chat-header-icon"><svg><use href="#i-send"></use></svg></span></header>
+        <section class="voice-panel" aria-label="语音通话">
+          <div class="voice-heading">
+            <span id="voiceIcon" class="voice-icon"><svg><use href="#i-mic"></use></svg></span>
+            <div><strong>语音通话</strong><small id="voiceStatus">默认关闭，需要时再开启</small></div>
+            <button id="voiceToggle" class="voice-toggle" type="button" aria-pressed="false">开启</button>
+          </div>
+          <div id="voiceControls" class="voice-controls" hidden>
+            <div class="voice-modes" role="group" aria-label="麦克风模式">
+              <button class="active" data-voice-mode="hold" type="button">按住说话</button>
+              <button data-voice-mode="free" type="button">自由说话</button>
+            </div>
+            <button id="holdToTalk" class="hold-to-talk" type="button"><svg><use href="#i-mic"></use></svg><span>按住说话</span><small>松开闭麦</small></button>
+            <div id="freeTalk" class="free-talk" hidden><span class="sound-bars"><i></i><i></i><i></i><i></i></span><div><strong>麦克风已打开</strong><small>对方可以听到你说话</small></div></div>
+          </div>
+        </section>
+        <div id="messages" class="messages" aria-live="polite" aria-label="聊天消息"></div>
+        <form id="chatForm" class="chat-composer">
+          <label class="composer-box">
+            <textarea id="chatInput" rows="1" maxlength="1000" placeholder="说点什么吧…" aria-label="聊天内容"></textarea>
+            <button id="sendButton" class="send-button" type="submit" aria-label="发送消息"><svg><use href="#i-send"></use></svg></button>
+          </label>
+          <div class="composer-hint"><span>Enter 发送 · Shift + Enter 换行</span><span id="charCount"></span></div>
+        </form>
+      </aside>
+    </main>
+  </div>
+
+  <div id="toastRegion" class="toast-region" aria-live="polite"></div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/vendor/spark-md5.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

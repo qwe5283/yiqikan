@@ -1,0 +1,12 @@
+services:
+  yiqikan:
+    build: .
+    image: yiqikan:latest
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      - yiqikan-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  yiqikan-data:
