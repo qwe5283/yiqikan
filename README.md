@@ -15,6 +15,7 @@ docker compose up -d
 打开 **http://localhost:3000**。在其他设备上访问时，将 `localhost` 换成运行 Docker 的主机地址。
 
 - 修改端口：复制 `.env.example` 为 `.env` 并修改 `APP_PORT`；也可临时执行 `APP_PORT=8080 docker compose up -d`。
+- 上传上限：在 `.env` 中修改 `MAX_FILE_SIZE_BYTES`（单位：字节），默认 `2147483648`（2 GiB），修改后重新执行 `docker compose up -d`。
 - 查看日志：`docker compose logs -f`
 - 停止服务：`docker compose down`
 - 上传的媒体直接保存在项目目录的 `./data`，重启、`down` 或 `down -v` 都不会删除这些宿主机文件。
@@ -40,7 +41,7 @@ npm start
 
 - 房间和消息保存在内存中，所有成员离开后房间自动解散。
 - 媒体按 MD5 全局去重，重启后仍可秒传。
-- 单个文件最大 1 GB；实际可播放格式取决于浏览器解码能力，推荐 MP4、WebM、MP3、M4A。
+- 单个文件默认最大 2 GiB，可通过环境变量 `MAX_FILE_SIZE_BYTES`（单位：字节）调整；实际可播放格式取决于浏览器解码能力，推荐 MP4、WebM、MP3、M4A。
 - 语音需要麦克风权限，公网部署应使用 HTTPS。内置公共 STUN；复杂 NAT 或跨运营商网络需要自行配置 TURN 服务。
 
 ## 检查

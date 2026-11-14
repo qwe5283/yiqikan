@@ -12,8 +12,11 @@ const {
   appendMessage,
   systemMessage,
 } = require('./lib/rooms');
+const { readMaxFileSize, fileSizeLabel } = require('./lib/config');
 
 const PORT = Number(process.env.PORT) || 3000;
+const MAX_FILE_SIZE = readMaxFileSize();
+const MAX_FILE_SIZE_LABEL = fileSizeLabel(MAX_FILE_SIZE);
 const ROOT = __dirname;
 const DATA_DIR = path.join(ROOT, 'data');
 const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
@@ -69,6 +72,10 @@ app.get('/vendor/spark-md5.js', (req, res) => {
   res.sendFile(require.resolve('spark-md5/spark-md5.js'));
 });
 app.get('/api/health', (req, res) => res.json({ ok: true }));
+app.get('/api/config', (req, res) => res.json({
+  maxFileSize: MAX_FILE_SIZE,
+  maxFileSizeLabel: MAX_FILE_SIZE_LABEL,
+}));
 app.get('/api/media/check', (req, res) => {
   const md5 = String(req.query.md5 || '').toLowerCase();
   if (!/^[a-f0-9]{32}$/.test(md5)) return res.status(400).json({ error: '无效的 MD5' });
@@ -81,7 +88,7 @@ const upload = multer({
     destination: TEMP_DIR,
     filename: (req, file, callback) => callback(null, crypto.randomUUID()),
   }),
-  limits: { fileSize: 1024 ** 3, files: 1 },
+  limits: { fileSize: MAX_FILE_SIZE, files: 1 },
 });
 
 function hashFile(filePath) {
@@ -135,7 +142,7 @@ app.use((error, req, res, next) => {
   console.error(error);
   if (res.headersSent) return next(error);
   const status = error.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
-  const message = error.code === 'LIMIT_FILE_SIZE' ? '单个文件不能超过 1 GB' : error.message || '请求失败';
+  const message = error.code === 'LIMIT_FILE_SIZE' ? `单个文件不能超过 ${MAX_FILE_SIZE_LABEL}` : error.message || '请求失败';
   return res.status(status).json({ error: message });
 });
 

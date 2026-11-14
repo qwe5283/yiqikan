@@ -3,6 +3,8 @@ services:
     build: .
     ports:
       - "${APP_PORT:-3000}:3000"
+    environment:
+      - MAX_FILE_SIZE_BYTES=${MAX_FILE_SIZE_BYTES:-2147483648}
     volumes:
       - ./data:/app/data
     restart: unless-stopped

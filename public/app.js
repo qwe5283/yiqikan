@@ -16,9 +16,23 @@
     lastControlAt: 0,
     seeking: false,
     uploadBusy: false,
+    maxFileSize: 2 * 1024 ** 3,
+    maxFileSizeLabel: '2 GiB',
     reconnecting: false,
     voice: { active: false, mode: 'hold', stream: null, peers: new Map() },
   };
+  const configReady = fetch('/api/config')
+    .then((response) => {
+      if (!response.ok) throw new Error('配置读取失败');
+      return response.json();
+    })
+    .then((config) => {
+      if (!Number.isSafeInteger(config.maxFileSize) || config.maxFileSize <= 0) return;
+      state.maxFileSize = config.maxFileSize;
+      state.maxFileSizeLabel = config.maxFileSizeLabel || state.maxFileSizeLabel;
+      $('maxFileSizeLabel').textContent = `支持常见音视频格式 · 最大 ${state.maxFileSizeLabel}`;
+    })
+    .catch(() => {});
 
   function icon(name) {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -378,9 +392,10 @@
     $('uploadButton').disabled = true;
     $('emptyUploadButton').disabled = true;
     try {
+      await configReady;
       for (const file of files) {
         try {
-          if (file.size > 1024 ** 3) throw new Error('单个文件不能超过 1 GB');
+          if (file.size > state.maxFileSize) throw new Error(`单个文件不能超过 ${state.maxFileSizeLabel}`);
           if (!file.size) throw new Error('不能上传空文件');
           await uploadOne(file);
         } catch (error) {
