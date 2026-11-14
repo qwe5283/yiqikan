@@ -770,9 +770,24 @@
       }
     }, 3000);
   }
+  let fullscreenTouchTap = false;
   for (const event of ['pointermove', 'pointerdown', 'pointerup']) {
-    $('stage').parentElement.addEventListener(event, showFullscreenControls, { passive: true });
+    $('stage').parentElement.addEventListener(event, (event) => {
+      const touchOnStage = event.pointerType === 'touch' && $('stage').contains(event.target) && !event.target.closest('button');
+      if (event.type === 'pointerdown') fullscreenTouchTap = touchOnStage;
+      if (touchOnStage) return;
+      showFullscreenControls();
+    }, { passive: true });
   }
+  $('stage').addEventListener('click', (event) => {
+    if (!fullscreenTouchTap) return;
+    fullscreenTouchTap = false;
+    const playerCard = $('stage').parentElement;
+    if (document.fullscreenElement !== playerCard || event.target.closest('button')) return;
+    const hidden = playerCard.classList.toggle('controls-hidden');
+    clearTimeout(fullscreenHideTimer);
+    if (!hidden) showFullscreenControls();
+  });
   document.addEventListener('keydown', showFullscreenControls);
   $('fullscreenButton').addEventListener('click', async () => {
     const playerCard = $('stage').parentElement;
