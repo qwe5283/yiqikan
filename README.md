@@ -28,6 +28,17 @@ sudo chown -R 1000:1000 data
 docker compose up -d
 ```
 
+## 可选：启用 TURN 语音中继
+
+默认配置只使用公共 STUN。若复杂 NAT 下语音无法连接，可在 **Linux 公网服务器**启用同机 coturn；默认一键启动流程不受影响。
+
+1. 复制 `.env.example` 为 `.env`，填写 `TURN_HOST`、`TURN_EXTERNAL_IP`，并取消 `COMPOSE_FILE` 注释。
+2. 执行 `openssl rand -hex 32`，将结果填为 `TURN_SECRET`。该密钥只保存在服务器，不提交到 Git。
+3. 在云安全组和本机防火墙放行 `3478/TCP`、`3478/UDP` 以及 `49152-49252/UDP`。
+4. 执行 `docker compose up -d`，应用和 coturn 会一起启动。
+
+应用会在每次开启语音时获取新的短期 TURN 凭据，优先尝试 P2P，失败后再走 TURN。可通过 `TURN_PORT`、`TURN_MIN_PORT`、`TURN_MAX_PORT` 调整端口，通过 `TURN_CREDENTIAL_TTL_SECONDS` 调整凭据有效期（默认 24 小时）。
+
 ## 本地开发
 
 需要 Node.js 18 或更高版本：
@@ -42,7 +53,7 @@ npm start
 - 房间和消息保存在内存中，所有成员离开后房间自动解散。
 - 媒体按 MD5 全局去重，重启后仍可秒传。
 - 单个文件默认最大 2 GiB，可通过环境变量 `MAX_FILE_SIZE_BYTES`（单位：字节）调整；实际可播放格式取决于浏览器解码能力，推荐 MP4、WebM、MP3、M4A。
-- 语音需要麦克风权限，公网部署应使用 HTTPS。内置公共 STUN；复杂 NAT 或跨运营商网络需要自行配置 TURN 服务。
+- 语音需要麦克风权限，公网部署应使用 HTTPS。未配置 TURN 时使用公共 STUN；复杂 NAT 可按上一节启用 coturn 中继。
 
 ## 检查
 

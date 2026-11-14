@@ -1,0 +1,26 @@
+services:
+  yiqikan:
+    environment:
+      - TURN_HOST=${TURN_HOST:?Set TURN_HOST for TURN}
+      - TURN_SECRET=${TURN_SECRET:?Set TURN_SECRET for TURN}
+      - TURN_PORT=${TURN_PORT:-3478}
+      - TURN_CREDENTIAL_TTL_SECONDS=${TURN_CREDENTIAL_TTL_SECONDS:-86400}
+
+  turn:
+    image: coturn/coturn:4.6.3
+    network_mode: host
+    restart: unless-stopped
+    command:
+      - turnserver
+      - --no-cli
+      - --log-file=stdout
+      - --fingerprint
+      - --use-auth-secret
+      - --static-auth-secret=${TURN_SECRET:?Set TURN_SECRET for TURN}
+      - --realm=${TURN_HOST:?Set TURN_HOST for TURN}
+      - --external-ip=${TURN_EXTERNAL_IP:?Set TURN_EXTERNAL_IP for TURN}
+      - --listening-port=${TURN_PORT:-3478}
+      - --min-port=${TURN_MIN_PORT:-49152}
+      - --max-port=${TURN_MAX_PORT:-49252}
+      - --no-loopback-peers
+      - --no-multicast-peers

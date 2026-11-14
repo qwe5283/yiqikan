@@ -18,21 +18,22 @@
     uploadBusy: false,
     maxFileSize: 2 * 1024 ** 3,
     maxFileSizeLabel: '2 GiB',
+    iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }],
     reconnecting: false,
     voice: { active: false, mode: 'hold', stream: null, peers: new Map() },
   };
-  const configReady = fetch('/api/config')
-    .then((response) => {
-      if (!response.ok) throw new Error('配置读取失败');
-      return response.json();
-    })
-    .then((config) => {
-      if (!Number.isSafeInteger(config.maxFileSize) || config.maxFileSize <= 0) return;
+  async function loadConfig() {
+    const response = await fetch('/api/config', { cache: 'no-store' });
+    if (!response.ok) throw new Error('配置读取失败');
+    const config = await response.json();
+    if (Number.isSafeInteger(config.maxFileSize) && config.maxFileSize > 0) {
       state.maxFileSize = config.maxFileSize;
       state.maxFileSizeLabel = config.maxFileSizeLabel || state.maxFileSizeLabel;
       $('maxFileSizeLabel').textContent = `支持常见音视频格式 · 最大 ${state.maxFileSizeLabel}`;
-    })
-    .catch(() => {});
+    }
+    if (Array.isArray(config.iceServers) && config.iceServers.length) state.iceServers = config.iceServers;
+  }
+  loadConfig().catch(() => {});
 
   function icon(name) {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -659,7 +660,7 @@
 
   function createPeer(id, initiator) {
     if (state.voice.peers.has(id)) return state.voice.peers.get(id);
-    const pc = new RTCPeerConnection({ iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] });
+    const pc = new RTCPeerConnection({ iceServers: state.iceServers });
     const peer = { pc, candidates: [], audio: null };
     state.voice.peers.set(id, peer);
     state.voice.stream?.getTracks().forEach((track) => pc.addTrack(track, state.voice.stream));
@@ -711,6 +712,7 @@
     }
     $('voiceToggle').disabled = true;
     try {
+      await loadConfig();
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
         video: false,
