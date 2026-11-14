@@ -269,6 +269,7 @@
 
   function formatSize(bytes) {
     if (!Number.isFinite(bytes)) return '';
+    if (bytes <= 0) return '0 KB';
     if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
     if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
     return `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -324,11 +325,50 @@
     }
   }
 
+  const TRANSFER_WINDOW = 2500;
+  const TRANSFER_PAINT = 120;
+  let transfer = null;
+
   function setUploadProgress(percent, status) {
     $('uploadProgress').hidden = false;
     $('uploadBar').style.width = `${percent}%`;
     $('uploadPercent').textContent = `${Math.round(percent)}%`;
     if (status) $('uploadStatus').textContent = status;
+  }
+
+  function formatSpeed(bytesPerSecond) {
+    const value = Number.isFinite(bytesPerSecond) ? Math.max(0, bytesPerSecond) : 0;
+    if (value >= 1024 ** 3) return `${(value / 1024 ** 3).toFixed(1)} GB/s`;
+    if (value >= 1024 ** 2) return `${(value / 1024 ** 2).toFixed(1)} MB/s`;
+    if (value >= 1024) return `${Math.round(value / 1024)} KB/s`;
+    return `${Math.round(value)} B/s`;
+  }
+
+  function beginTransfer(size) {
+    transfer = { size, startedAt: performance.now(), samples: [], paintedAt: 0 };
+    $('uploadMeta').hidden = false;
+    $('uploadSize').textContent = `0 KB / ${formatSize(size)}`;
+    $('uploadSpeed').textContent = '';
+  }
+
+  function trackTransfer(loaded, final = false) {
+    if (!transfer) return;
+    const now = performance.now();
+    const sent = Math.min(Math.max(loaded, 0), transfer.size);
+    const samples = transfer.samples;
+    samples.push({ at: now, loaded: sent });
+    while (samples.length > 2 && now - samples[0].at > TRANSFER_WINDOW) samples.shift();
+    if (!final && now - transfer.paintedAt < TRANSFER_PAINT) return;
+    transfer.paintedAt = now;
+    const first = samples[0];
+    const elapsed = (now - first.at) / 1000;
+    // 过程中用最近窗口的瞬时速度，收尾时用全程平均速度，避免末尾数字乱跳
+    const speed = final
+      ? transfer.size / Math.max(0.001, (now - transfer.startedAt) / 1000)
+      : (elapsed > 0 ? (sent - first.loaded) / elapsed : 0);
+    setUploadProgress(50 + (sent / transfer.size) * 45);
+    $('uploadSize').textContent = `${formatSize(sent)} / ${formatSize(transfer.size)}`;
+    $('uploadSpeed').textContent = final || elapsed >= 0.4 ? formatSpeed(speed) : '';
   }
 
   async function md5Of(file) {
@@ -348,13 +388,16 @@
       request.open('POST', '/api/media/upload');
       request.responseType = 'json';
       request.upload.onprogress = (event) => {
-        if (event.lengthComputable) setUploadProgress(50 + (event.loaded / event.total) * 45, '正在上传媒体…');
+        if (event.lengthComputable) trackTransfer(event.loaded);
       };
       request.onerror = () => reject(new Error('上传失败，请检查网络'));
       request.onabort = () => reject(new Error('上传已取消'));
       request.onload = () => {
         const response = request.response || {};
-        if (request.status >= 200 && request.status < 300 && response.media) return resolve(response.media);
+        if (request.status >= 200 && request.status < 300 && response.media) {
+          trackTransfer(file.size, true);
+          return resolve(response.media);
+        }
         reject(new Error(response.error || '上传失败'));
       };
       const form = new FormData();
@@ -367,6 +410,8 @@
 
   async function uploadOne(file) {
     $('uploadName').textContent = file.name;
+    transfer = null;
+    $('uploadMeta').hidden = true;
     setUploadProgress(2, '正在读取文件…');
     const md5 = await md5Of(file);
     setUploadProgress(47, '正在检查是否可以秒传…');
@@ -378,6 +423,8 @@
       setUploadProgress(96, '发现相同文件，秒传完成');
       toast(`「${file.name}」已秒传`, 'success');
     } else {
+      setUploadProgress(50, '正在上传媒体…');
+      beginTransfer(file.size);
       media = await uploadRequest(file, md5);
     }
     setUploadProgress(100, '正在加入播放列表…');
@@ -405,6 +452,7 @@
       }
     } finally {
       state.uploadBusy = false;
+      transfer = null;
       $('uploadButton').disabled = false;
       $('emptyUploadButton').disabled = false;
       $('uploadProgress').hidden = true;
