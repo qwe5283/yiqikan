@@ -14,7 +14,7 @@ docker compose up -d
 
 打开 **http://localhost:3000**。在其他设备上访问时，将 `localhost` 换成运行 Docker 的主机地址。
 
-- 修改端口：`APP_PORT=8080 docker compose up -d`
+- 修改端口：复制 `.env.example` 为 `.env` 并修改 `APP_PORT`；也可临时执行 `APP_PORT=8080 docker compose up -d`。
 - 查看日志：`docker compose logs -f`
 - 停止服务：`docker compose down`
 - 上传的媒体直接保存在项目目录的 `./data`，重启、`down` 或 `down -v` 都不会删除这些宿主机文件。
