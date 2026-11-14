@@ -33,7 +33,7 @@
     }
     if (Array.isArray(config.iceServers) && config.iceServers.length) state.iceServers = config.iceServers;
   }
-  loadConfig().catch(() => {});
+  const configReady = loadConfig().catch(() => {});
 
   function icon(name) {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
