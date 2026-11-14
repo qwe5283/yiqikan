@@ -625,7 +625,8 @@
 
   function serverPosition() {
     if (!state.playback) return 0;
-    const elapsed = state.playback.paused ? 0 : Math.max(0, Date.now() - state.playback.updatedAt) / 1000;
+    // 两端墙钟可能不同步，快照到达后只使用本机单调时钟推进。
+    const elapsed = state.playback.paused ? 0 : Math.max(0, performance.now() - state.playback.localUpdatedAt) / 1000;
     return state.playback.currentTime + elapsed;
   }
 
@@ -683,8 +684,10 @@
   }
 
   function applyPlayback(playback) {
+    // 本地操作已即时应用，本人回包不应再次覆盖播放进度。
+    if (state.currentMediaId && playback?.actorId === state.selfId) return;
     const previousId = state.currentMediaId;
-    state.playback = playback;
+    state.playback = { ...playback, localUpdatedAt: performance.now() };
     const media = currentMedia();
     if (playback?.mediaId !== previousId) {
       const player = $('player');
@@ -709,7 +712,7 @@
     if (!Number.isFinite(currentTime)) currentTime = type === 'play' ? serverPosition() : $('player').currentTime;
     if (type === 'play' && $('player').ended) currentTime = 0;
     state.lastControlAt = Date.now();
-    state.playback = { ...state.playback, currentTime, paused: type === 'seek' ? state.playback.paused : type === 'pause', updatedAt: Date.now() };
+    state.playback = { ...state.playback, currentTime, paused: type === 'seek' ? state.playback.paused : type === 'pause', updatedAt: Date.now(), localUpdatedAt: performance.now() };
     if (type === 'play') {
       try {
         await $('player').play();

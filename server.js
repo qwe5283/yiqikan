@@ -310,6 +310,7 @@ io.on('connection', (socket) => {
       currentTime: Number.isFinite(requested) ? Math.max(0, requested) : current.currentTime,
       paused: payload.type === 'seek' ? current.paused : payload.type === 'pause',
       updatedAt: Date.now(),
+      actorId: socket.id,
     };
     io.to(room.code).emit('playback:state', playbackSnapshot(room));
     ack({ ok: true });
