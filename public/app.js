@@ -558,6 +558,22 @@
     $('player').muted = !$('player').muted;
     $('muteButton').querySelector('use').setAttribute('href', $('player').muted ? '#i-mute' : '#i-volume');
   });
+  let fullscreenHideTimer;
+  function showFullscreenControls() {
+    const playerCard = $('stage').parentElement;
+    if (!document.fullscreenElement) return;
+    playerCard.classList.remove('controls-hidden');
+    clearTimeout(fullscreenHideTimer);
+    fullscreenHideTimer = setTimeout(() => {
+      if (document.fullscreenElement === playerCard && !state.seeking) {
+        playerCard.classList.add('controls-hidden');
+      }
+    }, 3000);
+  }
+  for (const event of ['pointermove', 'pointerdown', 'pointerup']) {
+    $('stage').parentElement.addEventListener(event, showFullscreenControls, { passive: true });
+  }
+  document.addEventListener('keydown', showFullscreenControls);
   $('fullscreenButton').addEventListener('click', async () => {
     const playerCard = $('stage').parentElement;
     try {
@@ -565,13 +581,16 @@
       else if (playerCard.requestFullscreen) await playerCard.requestFullscreen();
       else if ($('player').webkitEnterFullscreen) $('player').webkitEnterFullscreen();
     } catch {
-      toast('当前浏览器不支持全屏', 'error');
+      toast('当前浏览器不支持全屏，也可尝试按 F11', 'error');
     }
   });
   document.addEventListener('fullscreenchange', () => {
     const label = document.fullscreenElement ? '退出全屏' : '全屏';
     $('fullscreenButton').setAttribute('aria-label', label);
     $('fullscreenButton').title = label;
+    clearTimeout(fullscreenHideTimer);
+    if (document.fullscreenElement) showFullscreenControls();
+    else $('stage').parentElement.classList.remove('controls-hidden');
   });
   $('player').addEventListener('loadedmetadata', () => syncPlayer(true));
   $('player').addEventListener('play', updatePlayButton);
