@@ -13,6 +13,7 @@ const {
 const { readMaxFileSize, fileSizeLabel } = require('./lib/config');
 const { createIceServers } = require('./lib/turn');
 const { createUploadStore, UploadError } = require('./lib/uploads');
+const { cleanFileName, mediaFromUrl } = require('./lib/media-url');
 
 const PORT = Number(process.env.PORT) || 3000;
 const MAX_FILE_SIZE = readMaxFileSize();
@@ -38,10 +39,6 @@ const uploadStore = createUploadStore({
   allowedExtensions: Object.keys(MEDIA_TYPES),
 });
 const mediaIndex = new Map();
-
-function cleanFileName(value) {
-  return path.basename(String(value || '未命名媒体')).replace(/[\0\r\n]/g, '').trim().slice(0, 120) || '未命名媒体';
-}
 
 function makeMedia(md5, extension, name, size) {
   return {
@@ -279,6 +276,22 @@ io.on('connection', (socket) => {
     const existing = room.playlist.find((item) => item.id === media.id);
     if (existing) return ack({ ok: true, duplicate: true, item: existing });
     const item = { ...media, name: cleanFileName(payload.name || media.name), addedBy: user.nickname };
+    room.playlist.push(item);
+    io.to(room.code).emit('playlist:state', room.playlist);
+    emitSystem(room, `${user.nickname} 添加了《${item.name}》`);
+    if (!room.playback.mediaId) {
+      room.playback = { mediaId: item.id, currentTime: 0, paused: true, updatedAt: Date.now() };
+      io.to(room.code).emit('playback:state', playbackSnapshot(room));
+    }
+    ack({ ok: true, item });
+  });
+
+  socketHandler(socket, 'media:add-url', (payload, ack) => {
+    const { room, user } = member(socket);
+    const media = mediaFromUrl(payload && payload.url);
+    const existing = room.playlist.find((item) => item.id === media.id);
+    if (existing) return ack({ ok: true, duplicate: true, item: existing });
+    const item = { ...media, addedBy: user.nickname };
     room.playlist.push(item);
     io.to(room.code).emit('playlist:state', room.playlist);
     emitSystem(room, `${user.nickname} 添加了《${item.name}》`);

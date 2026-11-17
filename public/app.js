@@ -129,6 +129,8 @@
     state.messages = [];
     state.playback = null;
     state.currentMediaId = null;
+    setUrlFormVisible(false);
+    $('urlInput').value = '';
     $('player').pause();
     $('player').removeAttribute('src');
     $('player').load();
@@ -304,7 +306,8 @@
       name.textContent = media.name;
       name.title = media.name;
       const detail = document.createElement('small');
-      detail.textContent = `${media.kind === 'audio' ? '音频' : '视频'} · ${formatSize(media.size)} · ${media.addedBy || '房间成员'}`;
+      const source = media.source === 'url' ? '在线媒体' : formatSize(media.size);
+      detail.textContent = `${media.kind === 'audio' ? '音频' : '视频'} · ${source} · ${media.addedBy || '房间成员'}`;
       copy.append(name, detail);
       button.append(thumb, copy);
       if (active && !state.playback?.paused) {
@@ -613,6 +616,34 @@
     });
   }
 
+  function setUrlFormVisible(visible) {
+    $('urlForm').hidden = !visible;
+    $('addUrlButton').setAttribute('aria-expanded', String(visible));
+    if (visible) $('urlInput').focus();
+  }
+
+  $('addUrlButton').addEventListener('click', () => {
+    if (state.code) setUrlFormVisible($('urlForm').hidden);
+  });
+  $('urlForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const url = $('urlInput').value.trim();
+    if (!url) return;
+    $('urlSubmit').disabled = true;
+    $('urlSubmit').textContent = '添加中…';
+    try {
+      const result = await emitAck('media:add-url', { url });
+      toast(result.duplicate ? '这个链接已经在播放列表中' : '已添加在线媒体', result.duplicate ? '' : 'success');
+      $('urlInput').value = '';
+      setUrlFormVisible(false);
+    } catch (error) {
+      toast(error.message, 'error');
+    } finally {
+      $('urlSubmit').disabled = false;
+      $('urlSubmit').textContent = '添加';
+    }
+  });
+
   function formatTime(seconds) {
     const value = Math.max(0, Math.floor(Number(seconds) || 0));
     const hours = Math.floor(value / 3600);
@@ -819,7 +850,11 @@
     if (state.playback && !state.playback.paused) playbackAction('pause', $('player').duration || 0);
   });
   $('player').addEventListener('error', () => {
-    if (state.currentMediaId) toast('当前浏览器无法解码这个文件，建议换用 MP4 / WebM / MP3', 'error');
+    if (!state.currentMediaId) return;
+    const message = currentMedia()?.source === 'url'
+      ? '在线媒体加载失败，请确认链接公开可访问，并指向浏览器支持的音视频文件'
+      : '当前浏览器无法解码这个文件，建议换用 MP4 / WebM / MP3';
+    toast(message, 'error');
   });
 
   function updateVoiceUI() {
